@@ -1,0 +1,51 @@
+name: Quality Assurance & Release Readiness CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+# Security Hardening: Minimal permissions
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Typecheck, Lint, Test & Build Verification
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js Runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Secret Scan Verification
+        run: |
+          echo "Scanning for accidental secret commits..."
+          # Verify no .dev.vars, .env, or raw private keys were committed
+          ! git ls-files | grep -E '(\.dev\.vars|\.env$|id_rsa|private\.pem)' || (echo "ERROR: Sensitive file committed!" && exit 1)
+
+      - name: TypeScript Type Checking
+        run: npm run typecheck
+
+      - name: Lint & Development Build Validation
+        run: npm run lint
+
+      - name: Automated Unit & Integration Tests
+        run: npm test
+
+      - name: Production Bundle Build
+        run: npm run build
+
+      - name: Cloudflare Wrangler Configuration Dry-Run
+        run: npx wrangler deploy --dry-run --env=""
+
